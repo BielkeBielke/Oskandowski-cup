@@ -224,6 +224,36 @@
     border-radius:8px;margin-bottom:.4rem;font-size:.85rem}
   .hist-year{font-family:var(--mono);color:var(--muted)}
   .hist-name{font-weight:500}
+
+  /* group-stage inline roll button */
+  .rollbtn{padding:.3rem .7rem;font-size:.75rem}
+
+  /* floating "next match" button (dice mode) — thumb zone, bottom-right */
+  .fab-next{
+    position:fixed;right:1rem;bottom:1rem;z-index:40;
+    background:var(--brass);color:#231c07;border:1px solid var(--brass);
+    font-weight:700;font-family:var(--sans);font-size:.95rem;
+    padding:.85rem 1.3rem;border-radius:99px;cursor:pointer;
+    box-shadow:0 4px 16px rgba(0,0,0,.4);display:none;align-items:center;gap:.4rem;
+  }
+  .fab-next.show{display:inline-flex}
+  .fab-next:active{transform:translateY(1px)}
+  .fab-next:focus-visible{outline:2px solid var(--chalk);outline-offset:2px}
+
+  /* mobile: bigger tap targets, easier thumb reach */
+  @media (max-width: 640px){
+    main{padding:1rem .8rem 5.5rem}       /* room for the floating button */
+    .rollbtn{padding:.6rem 1rem;font-size:.9rem;min-height:44px}
+    .score input{width:2.6em;font-size:1.05rem;padding:.5rem .2rem;min-height:44px}
+    .match{font-size:.9rem;gap:.4rem}
+    .tie .sc{padding:.4rem;min-width:2em}   /* larger clickable score in knockout */
+    .tie .row{padding:.6rem}
+    /* full-width, tall roll button in the dice popup */
+    .dicebox{max-width:92vw}
+    .dicebox .primary, #diceRoll{width:100%;padding:1rem;font-size:1.05rem;min-height:52px}
+    .fab-next{font-size:1rem;padding:.95rem 1.4rem}
+  }
+
   @media (prefers-reduced-motion: reduce){
     .die.roll{animation:none}
   }
@@ -246,6 +276,8 @@
 </header>
 
 <main id="app"></main>
+
+<button class="fab-next" id="fabNext" aria-label="Next match">Next ▸</button>
 
 <div class="overlay" id="diceOverlay">
   <div class="dicebox">
@@ -483,6 +515,7 @@ function render(){
   else if(G.stage==='groups') renderGroups();
   else renderKnockout();
   paintFlags(document.getElementById('app'));
+  updateFab();
 }
 
 // Replace flag emoji with tiny Twemoji images so flags show cross-platform
@@ -597,7 +630,7 @@ function renderGroup(grp){
     if(G.scoreMode==='dice'){
       scoreCell = played
         ? `<span class="played">${m.hs} – ${m.as}</span>`
-        : `<button class="ghost" style="padding:.15rem .5rem;font-size:.72rem" data-roll-group="${grp.letter}" data-mi="${mi}">roll</button>`;
+        : `<button class="ghost rollbtn" data-roll-group="${grp.letter}" data-mi="${mi}">roll</button>`;
     } else {
       scoreCell = `<span class="score">
         <input type="number" min="0" value="${m.hs??''}" data-g="${grp.letter}" data-mi="${mi}" data-side="h" aria-label="${h.name} goals">
@@ -932,6 +965,7 @@ function closeDice(){
   document.getElementById('diceOverlay').classList.remove('show');
   document.getElementById('diceRoll').textContent='Roll';
   diceCb=null; diceScoreState=null; soState=null; etState=null; d20State=null; rolling=false;
+  if(typeof updateFab==='function') updateFab();
 }
 
 function doRoll(){
@@ -1155,6 +1189,24 @@ function openNext(){
     toast('No tie is ready to play yet');
   }
 }
+
+// Does an unplayed match / ready tie exist right now (dice mode)?
+function hasNext(){
+  if(!G || G.scoreMode!=='dice') return false;
+  if(G.stage==='groups'){
+    return G.groups.some(grp=>grp.matches.some(m=>m.hs==null));
+  }
+  if(G.knockout && !G.knockout.champion){
+    return G.knockout.rounds.some(r=>r.some(t=>t.h!=null && t.a!=null && t.hs==null));
+  }
+  return false;
+}
+function updateFab(){
+  const fab=document.getElementById('fabNext');
+  if(!fab) return;
+  fab.classList.toggle('show', hasNext() && !modalOpen());
+}
+document.getElementById('fabNext').onclick=openNext;
 
 document.addEventListener('keydown',(e)=>{
   const tag=(e.target.tagName||'').toLowerCase();
