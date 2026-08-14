@@ -7,6 +7,10 @@ It's a single HTML file with no build step, no server, and no dependencies to in
 
 ## Play it
 
+```
+https://bielkebielke.github.io/Oskandowski-cup/
+```
+
 If hosted on GitHub Pages, it lives at:
 
 ```
