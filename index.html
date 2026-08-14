@@ -138,7 +138,10 @@
   .played{color:var(--muted)}
 
   /* ===== Knockout bracket ===== */
-  .bracket{display:flex;gap:1.4rem;overflow-x:auto;padding-bottom:1rem}
+  .bracket-wrap{position:relative}
+  .connectors{position:absolute;top:0;left:0;pointer-events:none;z-index:0}
+  .bracket{display:flex;gap:1.4rem;overflow-x:auto;padding-bottom:1rem;position:relative}
+  .round{position:relative;z-index:1}
   .round{display:flex;flex-direction:column;justify-content:space-around;gap:1rem;min-width:210px}
   .round h4{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);text-align:center;margin:0 0 .3rem}
   .tie{
@@ -317,8 +320,8 @@
         </svg>
       </div>
       <div class="dice-txt">
-        <strong>hidden d6 — the bonus die</strong>
-        <span>Roll a 3 on the d4 and a hidden d6 rolls behind the scenes. On a 6 you get a bonus goal, chaining on further 6s. You only see the final score. Hard cap: 9.</span>
+        <strong>d6 — the bonus die</strong>
+        <span>Roll a 3 on the d4 and you earn a bonus roll. Roll the d6: a 6 scores another goal, and you can roll again for more, chaining on further 6s. Hard cap: 9.</span>
       </div>
     </div>
 
@@ -414,19 +417,6 @@ function shuffle(arr){
   const a = arr.slice();
   for(let i=a.length-1;i>0;i--){ const j=rand(i+1); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
-}
-// Goal roll: d4 gives 0..3. On a 3, a hidden d6 is rolled; each 6 grants an
-// extra roll for one more goal (0 or 1), chaining on further 6s. Hard cap 9.
-function rollGoalWithBonus(){
-  let goals = rand(GOAL_DIE); // 0..3
-  if(goals === GOAL_DIE-1){   // rolled the max (3): bonus phase
-    while(goals < HARD_CAP){
-      const bonusDie = rand(6)+1; // silent d6, 1..6
-      if(bonusDie !== 6) break;
-      goals += rand(2);           // extra goal: 0 or 1
-    }
-  }
-  return Math.min(goals, HARD_CAP);
 }
 
 // ---- build a fresh tournament ----
@@ -545,7 +535,7 @@ function renderSetup(){
         <label class="sel" data-mode="click"><input type="radio" name="mode" checked>
           <div><strong>Click to set scores</strong><small>Type each team's goals (any number).</small></div></label>
         <label data-mode="dice"><input type="radio" name="mode">
-          <div><strong>Roll for scores</strong><small>A d4 sets goals (0–3). Roll a 3 and a hidden bonus die can add more, up to ${HARD_CAP}.</small></div></label>
+          <div><strong>Roll for scores</strong><small>A d4 sets goals (0–3). Roll a 3 and a bonus d6 can add more, up to ${HARD_CAP}.</small></div></label>
       </div>
       <button class="primary" id="btnStart">Draw the cup</button>
       ${renderHistoryPanel()}
@@ -600,7 +590,7 @@ function renderGroups(){
   const done = allGroupsComplete();
   app.innerHTML = stageBar() + `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
-      <div class="hint" style="margin:0">Top two of each group advance (▲). Ties: points, then goal difference, then goals scored${G.scoreMode==='dice'?' — press N for next match, D to roll':''}.</div>
+      <div class="hint" style="margin:0">Top two of each group advance (▲). Ties: points, then goal difference, then goals scored${G.scoreMode==='dice'?' — press N for next match, D to roll':' — Tab or Enter jumps between score fields'}.</div>
       <button class="primary" id="toKO" ${done?'':'disabled'}>Advance to knockout →</button>
     </div>
     <div class="groups">${G.groups.map(renderGroup).join('')}</div>`;
@@ -645,28 +635,79 @@ function renderGroup(grp){
     </div>`;
   }).join('');
 
-  return `<div class="group">
+  return `<div class="group" data-grp="${grp.letter}">
     <h3><span class="lbl">Group ${grp.letter}</span>${groupComplete(grp)?'<span style="color:var(--win);font-size:.7rem">complete</span>':''}</h3>
     <table>
       <thead><tr><th class="team">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF:GA</th><th>GD</th><th>Pts</th></tr></thead>
-      <tbody>${rowsHtml}</tbody>
+      <tbody id="tbody-${grp.letter}">${rowsHtml}</tbody>
     </table>
     <div class="matches">${matchesHtml}</div>
   </div>`;
 }
 
+// Rebuild only the standings tbodies from current data, leaving inputs (and
+// focus) untouched. Used while the user tabs through score fields.
+function refreshStandings(){
+  for(const grp of G.groups){
+    const tb=document.getElementById('tbody-'+grp.letter);
+    if(!tb) continue;
+    const s=standings(grp);
+    tb.innerHTML = s.map((r,i)=>{
+      const t=team(r.id);
+      return `<tr class="${i<2?'qual':''}">
+        <td class="team"><span class="flag">${t.flag}</span>${t.name}</td>
+        <td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+        <td>${r.GF}:${r.GA}</td><td>${r.GD>0?'+':''}${r.GD}</td><td><strong>${r.Pts}</strong></td>
+      </tr>`;
+    }).join('');
+    paintFlags(tb);
+  }
+}
+
+let focusInputAfterRender = null; // index of input to focus after a re-render
+
 function bindScoreInputs(){
-  app.querySelectorAll('input[type=number]').forEach(inp=>{
-    inp.onchange=()=>{
+  const inputs = Array.from(app.querySelectorAll('input[type=number]'));
+  inputs.forEach((inp,idx)=>{
+    const commit=()=>{
       let v = inp.value==='' ? null : Math.max(0, parseInt(inp.value,10));
       if(v!=null && isNaN(v)) v=null;
       inp.value = v==null?'':v;
       const grp = G.groups.find(x=>x.letter===inp.dataset.g);
       const m = grp.matches[+inp.dataset.mi];
       m[inp.dataset.side==='h'?'hs':'as'] = v;
-      save(); renderGroups();
+      save();
+    };
+    // Enter: save and jump to the next input (wraps at the end)
+    inp.onkeydown=(e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        commit();
+        focusInputAfterRender = (idx+1) % inputs.length;
+        renderGroups();
+      }
+    };
+    // blur/change (incl. native Tab): save the value. Avoid re-rendering here
+    // so native Tab focus isn't disrupted. Refresh standings only if this
+    // completes a group (worth showing) — otherwise standings refresh on the
+    // next explicit action (Enter, a roll, or Advance).
+    inp.onchange=()=>{
+      const wasComplete = allGroupsComplete();
+      commit();
+      const grp = G.groups.find(x=>x.letter===inp.dataset.g);
+      if(groupComplete(grp) && !wasComplete){ renderGroups(); }
+      else { refreshStandings(); }
     };
   });
+
+  // restore focus after a re-render triggered by Enter
+  if(focusInputAfterRender!=null){
+    const again = app.querySelectorAll('input[type=number]');
+    const target = again[focusInputAfterRender];
+    focusInputAfterRender = null;
+    if(target){ target.focus(); target.select && target.select(); }
+  }
+
   app.querySelectorAll('[data-roll-group]').forEach(btn=>{
     btn.onclick=()=>{
       const grp = G.groups.find(x=>x.letter===btn.dataset.rollGroup);
@@ -703,12 +744,12 @@ function renderKnockout(){
       <div class="hint" style="margin:.2rem 0 1rem">World Cup ${year} champions</div>
       <button class="primary" id="btnNext">Start World Cup ${year+4} →</button></div>`;
   }
-  app.innerHTML = stageBar() + champHtml + `<div class="bracket">${
+  app.innerHTML = stageBar() + champHtml + `<div class="bracket-wrap"><div class="bracket" id="bracket"><svg class="connectors" id="connectors" aria-hidden="true"></svg>${
     ko.rounds.map((round,ri)=>`
       <div class="round"><h4>${names[ri]}</h4>${
         round.map((t,ti)=>renderTie(t,ri,ti)).join('')
       }</div>`).join('')
-  }</div>
+  }</div></div>
   <div class="hint">${G.scoreMode==='dice'
     ? 'Roll to set each tie. Level results go to a shootout.'
     : 'Click a score to set it. Level ties go to a shootout.'}</div>`;
@@ -718,6 +759,37 @@ function renderKnockout(){
     // carry same team count and score mode into the next edition
     newGame(G.teamCount, G.scoreMode, G.competition, G.year+4);
   };
+  // draw connector lines after layout settles
+  requestAnimationFrame(drawConnectors);
+}
+
+// Draw lines from each tie to the tie it feeds into (ti → floor(ti/2) next round).
+function drawConnectors(){
+  const svg=document.getElementById('connectors');
+  const bracket=document.getElementById('bracket');
+  if(!svg||!bracket||!G||!G.knockout) return;
+  const w=bracket.scrollWidth, h=bracket.scrollHeight;
+  svg.setAttribute('width',w); svg.setAttribute('height',h);
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const base=bracket.getBoundingClientRect();
+  // convert a client rect to bracket-content coordinates
+  const toX=cx=> cx - base.left + bracket.scrollLeft;
+  const toY=cy=> cy - base.top + bracket.scrollTop;
+  let paths='';
+  const rounds=G.knockout.rounds;
+  for(let ri=0; ri<rounds.length-1; ri++){
+    for(let ti=0; ti<rounds[ri].length; ti++){
+      const from=document.getElementById(`tie-${ri}-${ti}`);
+      const to=document.getElementById(`tie-${ri+1}-${Math.floor(ti/2)}`);
+      if(!from||!to) continue;
+      const a=from.getBoundingClientRect(), b=to.getBoundingClientRect();
+      const x1=toX(a.right), y1=toY(a.top+a.height/2);
+      const x2=toX(b.left),  y2=toY(b.top+b.height/2);
+      const midX=(x1+x2)/2;
+      paths+=`<path d="M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}" fill="none" stroke="var(--line)" stroke-width="2"/>`;
+    }
+  }
+  svg.innerHTML=paths;
 }
 
 function renderTie(t,ri,ti){
@@ -743,7 +815,7 @@ function renderTie(t,ri,ti){
   const rollBtn = (diceMode && ready && !played)
     ? `<div class="tie-roll"><button class="ghost" style="width:100%;border-radius:0;border:none;border-top:1px solid var(--line);padding:.35rem;font-size:.72rem" data-roll-ko-ri="${ri}" data-roll-ko-ti="${ti}">roll result</button></div>`
     : '';
-  return `<div class="tie" data-ready="${ready}">
+  return `<div class="tie" id="tie-${ri}-${ti}" data-ri="${ri}" data-ti="${ti}" data-ready="${ready}">
     ${cell(t.h,'h')}
     ${cell(t.a,'a')}
     ${rollBtn}
@@ -853,15 +925,38 @@ let rolling=false;  // re-entrancy lock: ignore clicks mid-animation
 function paintModal(){ paintFlags(document.getElementById('diceOverlay')); }
 
 function openScoreDice(h,a,cb,label){
-  // d4 two-roll score flow: each roll gives 0..3 goals
+  // d4 flow: each side rolls; a 3 opens a visible bonus phase (see doRoll)
   const prefix = label ? `${label} · ` : '';
   document.getElementById('diceTitle').textContent=`${prefix}${h.name} vs ${a.name}`;
-  document.getElementById('diceSub').textContent='Roll the d4 for each side\u2019s goals (0\u20133)';
+  document.getElementById('diceSub').textContent='Roll the d4 for each side\u2019s goals (0\u20133; a 3 earns a bonus roll)';
   document.getElementById('diceResult').textContent='';
   document.getElementById('dieFace').textContent='?';
-  document.getElementById('diceRoll').textContent='Roll (D)';
-  diceMode='score'; diceCb=cb; diceScoreState={h:null,a:null,teams:{h,a}};
+  document.getElementById('diceRoll').textContent='Roll d4 (D)';
+  diceMode='score'; diceCb=cb; diceScoreState={h:null,a:null,pending:0,teams:{h,a}};
   document.getElementById('diceOverlay').classList.add('show');
+}
+
+// Record the finished goal total for the current side, then either prompt the
+// second side's roll or close and report the final score.
+function commitSideScore(goals, res){
+  const st=diceScoreState;
+  if(!st) return;
+  st.pending=0;
+  if(st.h==null){
+    st.h=goals;
+    // reset for the second side's d4 roll
+    document.getElementById('diceSub').textContent=`${st.teams.a.name} to roll (0\u20133; a 3 earns a bonus roll)`;
+    document.getElementById('diceRoll').textContent='Roll d4 (D)';
+    document.getElementById('dieFace').textContent='?';
+    res.innerHTML=`<div style="font-family:var(--mono);font-size:1rem">${st.teams.h.flag} ${st.h} – · ${st.teams.a.flag}</div>`;
+    paintModal();
+  } else {
+    st.a=goals;
+    res.innerHTML=`<div style="font-family:var(--mono);font-size:1.1rem;color:var(--brass)">${st.teams.h.flag} ${st.h} – ${st.a} ${st.teams.a.flag}</div>`;
+    paintModal();
+    const cb=diceCb, hs=st.h, as=st.a;
+    setTimeout(()=>{ closeDice(); if(cb) cb(hs,as); }, 800);
+  }
 }
 
 // Extra time: each team rolls the d4 once; a 1 scores (25%), else no goal.
@@ -971,6 +1066,7 @@ function closeDice(){
 function doRoll(){
   if(rolling) return;               // guard against rapid/double clicks
   if(diceMode==='score' && !diceScoreState) return;
+  if(diceMode==='bonus' && !diceScoreState) return;
   if(diceMode==='shootout' && !soState) return;
   if(diceMode==='extra' && !etState) return;
   if(diceMode==='d20' && !d20State) return;
@@ -981,20 +1077,51 @@ function doRoll(){
   const res=document.getElementById('diceResult');
 
   if(diceMode==='score'){
-    const val = rollGoalWithBonus(); // 0..9 via silent bonus dice
+    const base = rand(GOAL_DIE); // d4 → 0..3
     setTimeout(()=>{
       const st=diceScoreState;
       if(!st){ rolling=false; return; }   // closed mid-flight; bail safely
-      face.textContent=val;
-      if(st.h==null){
-        st.h=val;
-        res.textContent=`${st.teams.h.name}: ${val} — roll for ${st.teams.a.name}`;
+      face.textContent=base;
+      const sideName = st.h==null ? st.teams.h.name : st.teams.a.name;
+      if(base === GOAL_DIE-1){
+        // rolled a 3 → visible bonus phase
+        st.pending = base;              // goals accumulated for this side
+        diceMode='bonus';
+        document.getElementById('diceSub').textContent=`${sideName} rolled a 3 — bonus roll! A 6 on the d6 scores again.`;
+        res.innerHTML=`<div style="font-family:var(--mono);font-size:1rem">Goals so far: <strong style="color:var(--brass)">${base}</strong></div>`;
+        document.getElementById('diceRoll').textContent='Roll bonus d6 (D)';
         rolling=false;
       } else {
-        st.a=val;
-        res.textContent=`Final: ${st.h} – ${st.a}`;
-        const cb=diceCb, hs=st.h, as=val;
-        setTimeout(()=>{ closeDice(); rolling=false; if(cb) cb(hs,as); }, 700);
+        commitSideScore(base, res);
+        rolling=false;
+      }
+    },300);
+
+  } else if(diceMode==='bonus'){
+    const st=diceScoreState;
+    const d6 = rand(6)+1; // show the d6
+    setTimeout(()=>{
+      if(!diceScoreState){ rolling=false; return; }
+      face.textContent=d6;
+      const sideName = st.h==null ? st.teams.h.name : st.teams.a.name;
+      if(d6===6 && st.pending < HARD_CAP){
+        const extra = rand(2); // 0 or 1, shown automatically (no extra click)
+        st.pending = Math.min(HARD_CAP, st.pending + extra);
+        res.innerHTML=`<div style="font-size:.85rem;margin-bottom:.3rem">⚽ Six! Bonus goal roll: <strong>${extra}</strong> ${extra? '— goal!':'— no goal'}</div>`+
+          `<div style="font-family:var(--mono);font-size:1rem">Goals so far: <strong style="color:var(--brass)">${st.pending}</strong></div>`;
+        if(st.pending>=HARD_CAP){
+          document.getElementById('diceSub').textContent=`Hard cap reached (${HARD_CAP}).`;
+          setTimeout(()=>{ diceMode='score'; commitSideScore(st.pending, res); rolling=false; }, 900);
+        } else {
+          document.getElementById('diceSub').textContent=`${sideName}: roll again for another bonus, or it locks on a non-6.`;
+          document.getElementById('diceRoll').textContent='Roll bonus d6 (D)';
+          rolling=false;
+        }
+      } else {
+        // non-6 (or capped): bonus phase ends
+        res.innerHTML=`<div style="font-size:.85rem;margin-bottom:.3rem">${d6} — no more bonus</div>`+
+          `<div style="font-family:var(--mono);font-size:1rem">${sideName}: <strong style="color:var(--brass)">${st.pending}</strong></div>`;
+        setTimeout(()=>{ diceMode='score'; commitSideScore(st.pending, res); rolling=false; }, 900);
       }
     },300);
 
@@ -1207,6 +1334,11 @@ function updateFab(){
   fab.classList.toggle('show', hasNext() && !modalOpen());
 }
 document.getElementById('fabNext').onclick=openNext;
+
+// keep bracket connector lines aligned on resize
+window.addEventListener('resize', ()=>{
+  if(G && G.stage!=='groups' && G.knockout) requestAnimationFrame(drawConnectors);
+});
 
 document.addEventListener('keydown',(e)=>{
   const tag=(e.target.tagName||'').toLowerCase();
