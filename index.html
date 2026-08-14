@@ -932,18 +932,23 @@ function openScoreDice(h,a,cb,label){
   document.getElementById('diceResult').textContent='';
   document.getElementById('dieFace').textContent='?';
   document.getElementById('diceRoll').textContent='Roll d4 (D)';
-  diceMode='score'; diceCb=cb; diceScoreState={h:null,a:null,pending:0,teams:{h,a}};
+  diceMode='score'; diceCb=cb; diceScoreState={h:null,a:null,pending:0,side:'h',committing:false,teams:{h,a}};
   document.getElementById('diceOverlay').classList.add('show');
 }
 
 // Record the finished goal total for the current side, then either prompt the
-// second side's roll or close and report the final score.
+// second side's roll or close and report the final score. Side is tracked
+// explicitly (st.side) and guarded so a stray double-fire can't misfile a score.
 function commitSideScore(goals, res){
   const st=diceScoreState;
   if(!st) return;
+  if(st.committing) return;   // guard: ignore re-entrant commits
+  st.committing=true;
   st.pending=0;
-  if(st.h==null){
+  if(st.side==='h'){
     st.h=goals;
+    st.side='a';              // advance to away side
+    st.committing=false;
     // reset for the second side's d4 roll
     document.getElementById('diceSub').textContent=`${st.teams.a.name} to roll (0\u20133; a 3 earns a bonus roll)`;
     document.getElementById('diceRoll').textContent='Roll d4 (D)';
@@ -955,6 +960,8 @@ function commitSideScore(goals, res){
     res.innerHTML=`<div style="font-family:var(--mono);font-size:1.1rem;color:var(--brass)">${st.teams.h.flag} ${st.h} – ${st.a} ${st.teams.a.flag}</div>`;
     paintModal();
     const cb=diceCb, hs=st.h, as=st.a;
+    // mark done so nothing can re-enter before the modal closes
+    st.side='done';
     setTimeout(()=>{ closeDice(); if(cb) cb(hs,as); }, 800);
   }
 }
@@ -1093,7 +1100,7 @@ function doRoll(){
       const st=diceScoreState;
       if(!st){ rolling=false; return; }   // closed mid-flight; bail safely
       face.textContent=base;
-      const sideName = st.h==null ? st.teams.h.name : st.teams.a.name;
+      const sideName = st.side==='h' ? st.teams.h.name : st.teams.a.name;
       if(base === GOAL_DIE-1){
         // rolled a 3 → visible bonus phase
         st.pending = base;              // goals accumulated for this side
@@ -1114,7 +1121,7 @@ function doRoll(){
     setTimeout(()=>{
       if(!diceScoreState){ rolling=false; return; }
       face.textContent=d6;
-      const sideName = st.h==null ? st.teams.h.name : st.teams.a.name;
+      const sideName = st.side==='h' ? st.teams.h.name : st.teams.a.name;
       if(d6===6 && st.pending < HARD_CAP){
         const extra = rand(2); // 0 or 1, shown automatically (no extra click)
         st.pending = Math.min(HARD_CAP, st.pending + extra);
