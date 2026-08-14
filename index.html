@@ -1023,7 +1023,7 @@ function openShootout(h,a,levelAt,cb){
     hTaken:0, aTaken:0, // kicks taken
     turn:'h',           // whose kick is next
     phase:'best5',      // best5 → sudden
-    log:[]
+    seqH:[], seqA:[]    // per-team best-of-five kick outcomes (true=scored)
   };
   updateShootoutSub();
   document.getElementById('diceOverlay').classList.add('show');
@@ -1035,11 +1035,22 @@ function updateShootoutSub(){
   const res=document.getElementById('diceResult');
   const nextTeam = s.turn==='h'? s.teams.h : s.teams.a;
   const phase = s.phase==='best5' ? `Best of ${SO_KICKS}` : 'Sudden death';
-  res.innerHTML =
-    `<div style="font-family:var(--mono);font-size:1.1rem;margin-bottom:.3rem">`+
-    `${s.teams.h.flag} ${s.h} – ${s.a} ${s.teams.a.flag}</div>`+
-    `<div style="font-size:.75rem;color:var(--muted)">${phase} · next: ${nextTeam.flag} ${nextTeam.name}</div>`+
-    (s.log.length?`<div style="font-size:.72rem;color:var(--muted);margin-top:.4rem">${s.log.slice(-5).join(' · ')}</div>`:'');
+  const tally = `<div style="font-family:var(--mono);font-size:1.1rem;margin-bottom:.3rem">`+
+    `${s.teams.h.flag} ${s.h} – ${s.a} ${s.teams.a.flag}</div>`;
+  const nextLine = `<div style="font-size:.75rem;color:var(--muted)">${phase} · next: ${nextTeam.flag} ${nextTeam.name}</div>`;
+
+  let rows='';
+  if(s.phase==='best5'){
+    // one row per team: only kicks actually taken, ✔ / ✗
+    const rowFor=(flag,seq)=>{
+      const kicks = seq.map(ok=>ok?'✔':'✗').join(' ');
+      return `<div style="font-size:.8rem;margin-top:.25rem;display:flex;gap:.4rem;align-items:center">`+
+        `<span class="flag">${flag}</span><span style="font-family:var(--mono);letter-spacing:.15em">${kicks||'—'}</span></div>`;
+    };
+    rows = `<div style="margin-top:.5rem;text-align:left;display:inline-block">`+
+      rowFor(s.teams.h.flag, s.seqH)+rowFor(s.teams.a.flag, s.seqA)+`</div>`;
+  }
+  res.innerHTML = tally + nextLine + rows;
   paintModal();
 }
 
@@ -1132,9 +1143,8 @@ function doRoll(){
     setTimeout(()=>{
       if(!soState){ rolling=false; return; }
       face.textContent = scored ? '⚽' : '✗';
-      if(s.turn==='h'){ s.hTaken++; if(scored) s.h++; }
-      else { s.aTaken++; if(scored) s.a++; }
-      s.log.push(`${taker.flag}${scored?'✔':'✗'}`);
+      if(s.turn==='h'){ s.hTaken++; if(scored) s.h++; if(s.phase==='best5') s.seqH.push(!!scored); }
+      else { s.aTaken++; if(scored) s.a++; if(s.phase==='best5') s.seqA.push(!!scored); }
 
       if(s.phase==='best5'){
         s.turn = s.turn==='h' ? 'a' : 'h';
