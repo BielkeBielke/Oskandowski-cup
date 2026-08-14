@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kickoff Cup</title>
+<style>
+  /* ===== Design tokens =====
+     Subject: a solo, dice-driven world football cup. Feel: stadium at night —
+     floodlit turf, scoreboard type, a warm brass trophy accent. Deliberately
+     NOT the cream/terracotta AI default. */
+  :root{
+    --pitch:#0b3d2e;        /* deep floodlit turf */
+    --pitch-line:#12583f;
+    --night:#07130f;        /* near-black backdrop */
+    --panel:#0f231b;        /* raised panel */
+    --panel-2:#123024;
+    --chalk:#eef4ef;        /* line marking white */
+    --muted:#8fae9f;
+    --brass:#e2b552;        /* trophy accent */
+    --brass-dim:#a9863a;
+    --win:#57d98a;
+    --loss:#e06a6a;
+    --line:#1c4534;
+    --radius:10px;
+    --mono:'DM Mono','Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'Space Grotesk','Segoe UI',system-ui,sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #103a2b 0%, var(--night) 60%),
+      var(--night);
+    color:var(--chalk);
+    font-family:var(--sans);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:1rem;padding:1.1rem 1.4rem;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(226,181,82,.06), transparent);
+  }
+  .brand{display:flex;align-items:baseline;gap:.6rem}
+  .brand h1{
+    font-size:1.5rem;font-weight:700;letter-spacing:-.02em;margin:0;
+  }
+  .brand .accent{color:var(--brass)}
+  .brand .tag{font-family:var(--mono);font-size:.72rem;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .controls{display:flex;gap:.5rem;flex-wrap:wrap}
+
+  button{
+    font-family:var(--sans);font-size:.85rem;font-weight:500;
+    background:var(--panel-2);color:var(--chalk);
+    border:1px solid var(--line);border-radius:8px;
+    padding:.5rem .85rem;cursor:pointer;transition:.15s;
+  }
+  button:hover{border-color:var(--brass-dim);color:#fff}
+  button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  button.primary{background:var(--brass);color:#231c07;border-color:var(--brass);font-weight:700}
+  button.primary:hover{background:#f0c968}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.4;cursor:not-allowed}
+
+  main{max-width:1080px;margin:0 auto;padding:1.4rem}
+
+  /* ===== Setup screen ===== */
+  .setup{
+    text-align:center;padding:3rem 1rem;
+  }
+  .setup h2{font-size:2rem;margin:.2rem 0 .4rem;letter-spacing:-.02em}
+  .setup p{color:var(--muted);max-width:46ch;margin:0 auto 2rem;line-height:1.5}
+  .sizes{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.6rem}
+  .size-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:1.1rem 1.4rem;cursor:pointer;min-width:110px;transition:.15s;
+  }
+  .size-card:hover{border-color:var(--brass-dim)}
+  .size-card.sel{border-color:var(--brass);background:var(--panel-2)}
+  .size-card .n{font-family:var(--mono);font-size:1.8rem;color:var(--brass)}
+  .size-card .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+
+  .scoremode{display:flex;flex-direction:column;gap:.5rem;max-width:360px;margin:0 auto 1.8rem;text-align:left}
+  .scoremode label{
+    display:flex;gap:.6rem;align-items:flex-start;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:.7rem .9rem;cursor:pointer;font-size:.85rem;
+  }
+  .scoremode label.sel{border-color:var(--brass)}
+  .scoremode small{display:block;color:var(--muted);margin-top:.15rem}
+
+  /* ===== Stage nav ===== */
+  .stagebar{display:flex;gap:.4rem;margin-bottom:1.2rem;flex-wrap:wrap}
+  .stagebar .chip{
+    font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;
+    padding:.35rem .7rem;border-radius:99px;border:1px solid var(--line);color:var(--muted);
+  }
+  .stagebar .chip.active{border-color:var(--brass);color:var(--brass)}
+  .stagebar .chip.done{color:var(--win);border-color:var(--pitch-line)}
+
+  /* ===== Groups ===== */
+  .groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+  .group{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .group h3{
+    margin:0;padding:.6rem .9rem;font-size:.9rem;background:var(--panel-2);
+    border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;
+  }
+  .group h3 .lbl{font-family:var(--mono);color:var(--brass);font-size:.72rem;letter-spacing:.1em}
+  table{width:100%;border-collapse:collapse;font-size:.82rem}
+  th{font-family:var(--mono);font-weight:400;font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:.35rem .5rem;text-align:center}
+  th.team{text-align:left}
+  td{padding:.4rem .5rem;text-align:center;border-top:1px solid var(--line)}
+  td.team{text-align:left;display:flex;align-items:center;gap:.5rem}
+  .flag{font-size:1.05rem;line-height:1;width:1.4em;text-align:center}
+  tr.qual td{background:rgba(87,217,138,.07)}
+  tr.qual td.team::after{content:'▲';color:var(--win);font-size:.6rem;margin-left:.2rem}
+
+  .matches{padding:.6rem .9rem;border-top:1px solid var(--line)}
+  .match{
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.5rem;
+    padding:.4rem 0;font-size:.82rem;
+  }
+  .match .side{display:flex;align-items:center;gap:.4rem;min-width:0}
+  .match .side.home{justify-content:flex-end;text-align:right}
+  .match .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .score{
+    display:flex;gap:.25rem;align-items:center;font-family:var(--mono);
+  }
+  .score input{
+    width:2.1em;text-align:center;font-family:var(--mono);font-size:.9rem;
+    background:var(--night);color:var(--chalk);border:1px solid var(--line);border-radius:6px;padding:.2rem;
+  }
+  .score input:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+  .score .dash{color:var(--muted)}
+  .score .clk{cursor:pointer;min-width:1.6em;display:inline-block;border-bottom:1px dashed var(--brass-dim)}
+  .played{color:var(--muted)}
+
+  /* ===== Knockout bracket ===== */
+  .bracket{display:flex;gap:1.4rem;overflow-x:auto;padding-bottom:1rem}
+  .round{display:flex;flex-direction:column;justify-content:space-around;gap:1rem;min-width:210px}
+  .round h4{font-family:var(--mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);text-align:center;margin:0 0 .3rem}
+  .tie{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;
+  }
+  .tie .row{display:flex;justify-content:space-between;align-items:center;padding:.4rem .6rem;font-size:.82rem;gap:.4rem}
+  .tie .row + .row{border-top:1px solid var(--line)}
+  .tie .row.winner{background:rgba(226,181,82,.1)}
+  .tie .row.winner .nm{color:var(--brass);font-weight:700}
+  .tie .row .nm{display:flex;align-items:center;gap:.4rem;min-width:0;overflow:hidden}
+  .tie .row .nm span.t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tie .sc{font-family:var(--mono);cursor:pointer;min-width:1.4em;text-align:center;border-bottom:1px dashed var(--brass-dim)}
+  .tie .sc.set{border-bottom:none}
+  .champion{
+    text-align:center;padding:2rem;background:linear-gradient(180deg,rgba(226,181,82,.14),transparent);
+    border:1px solid var(--brass-dim);border-radius:var(--radius);margin-bottom:1.2rem;
+  }
+  .champion .cup{font-size:2.6rem}
+  .champion .who{font-size:1.6rem;font-weight:700;color:var(--brass);margin:.3rem 0}
+
+  /* ===== Dice modal ===== */
+  .overlay{
+    position:fixed;inset:0;background:rgba(3,10,7,.82);display:none;
+    align-items:center;justify-content:center;z-index:50;
+  }
+  .overlay.show{display:flex}
+  .dicebox{background:var(--panel);border:1px solid var(--brass-dim);border-radius:var(--radius);padding:1.6rem;text-align:center;max-width:340px}
+  .dicebox h3{margin:0 0 .3rem}
+  .dicebox p{color:var(--muted);font-size:.82rem;margin:.2rem 0 1rem}
+  .die{
+    width:84px;height:84px;margin:.4rem auto 1rem;border-radius:14px;
+    background:linear-gradient(145deg,#fff,#d9d9d9);color:#231c07;
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-size:2.4rem;font-weight:500;box-shadow:0 6px 0 var(--brass-dim);
+  }
+  .die.roll{animation:tumble .6s ease}
+  @keyframes tumble{
+    0%{transform:rotate(0) scale(1)}
+    25%{transform:rotate(-18deg) scale(1.08)}
+    50%{transform:rotate(14deg) scale(.96)}
+    75%{transform:rotate(-8deg) scale(1.04)}
+    100%{transform:rotate(0) scale(1)}
+  }
+  .diceresult{font-size:.9rem;margin-bottom:1rem;min-height:1.2em}
+
+  /* info / how-to-play popup */
+  .infobox{
+    background:var(--panel);border:1px solid var(--brass-dim);border-radius:var(--radius);
+    padding:1.6rem;max-width:440px;text-align:left;max-height:88vh;overflow:auto;
+  }
+  .infobox h3{margin:0 0 .3rem;font-size:1.2rem}
+  .infolead{color:var(--muted);font-size:.82rem;margin:.2rem 0 1.2rem;line-height:1.5}
+  .dice-row{display:flex;gap:.9rem;align-items:flex-start;margin-bottom:1rem}
+  .dice-ill{flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .dice-txt{display:flex;flex-direction:column;gap:.2rem}
+  .dice-txt strong{font-size:.9rem}
+  .dice-txt span{font-size:.78rem;color:var(--muted);line-height:1.45}
+  .info-flow{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    padding:.7rem .9rem;font-size:.8rem;line-height:1.5;margin-top:.4rem;
+  }
+  .info-flow strong{color:var(--brass)}
+  .infobox .primary{margin-top:1.2rem;width:100%}
+
+  /* twemoji renders flags as tiny inline images cross-platform */
+  img.emoji{height:1em;width:auto;vertical-align:-0.12em;margin:0 .02em}
+
+  .toast{
+    position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);
+    background:var(--panel-2);border:1px solid var(--brass-dim);color:var(--chalk);
+    padding:.6rem 1rem;border-radius:8px;font-size:.82rem;opacity:0;pointer-events:none;transition:.3s;z-index:60;
+  }
+  .toast.show{opacity:1}
+
+  .hint{font-family:var(--mono);font-size:.72rem;color:var(--muted);margin:.4rem 0 1rem}
+
+  /* champions history */
+  .history{max-width:420px;margin:2.4rem auto 0;text-align:left}
+  .history h3{font-size:.9rem;letter-spacing:.02em;margin:0 0 .6rem;color:var(--brass);
+    font-family:var(--mono);text-transform:uppercase;font-weight:500;font-size:.75rem;letter-spacing:.1em}
+  .hist-row{display:flex;justify-content:space-between;align-items:center;
+    padding:.5rem .8rem;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;margin-bottom:.4rem;font-size:.85rem}
+  .hist-year{font-family:var(--mono);color:var(--muted)}
+  .hist-name{font-weight:500}
+  @media (prefers-reduced-motion: reduce){
+    .die.roll{animation:none}
+  }
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>Kickoff <span class="accent">Cup</span></h1>
+    <span class="tag">solo dice football</span>
+  </div>
+  <div class="controls">
+    <button class="ghost" id="btnInfo">How to play</button>
+    <button class="ghost" id="btnExport" disabled>Export save</button>
+    <button class="ghost" id="btnImportTrigger" disabled>Import save</button>
+    <input type="file" id="fileImport" accept="application/json">
+    <button class="ghost" id="btnReset">New cup</button>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div class="overlay" id="diceOverlay">
+  <div class="dicebox">
+    <h3 id="diceTitle">Tiebreaker</h3>
+    <p id="diceSub"></p>
+    <div class="die" id="dieFace">–</div>
+    <div class="diceresult" id="diceResult"></div>
+    <button class="primary" id="diceRoll">Roll</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="infoOverlay">
+  <div class="infobox">
+    <h3>How the dice work</h3>
+    <p class="infolead">You decide every result — by hand, or with the dice. Here's what each die does.</p>
+
+    <div class="dice-row">
+      <div class="dice-ill">
+        <svg viewBox="0 0 60 60" width="52" height="52" aria-hidden="true">
+          <polygon points="30,4 56,52 4,52" fill="#3fae4f" stroke="#2c7d38" stroke-width="2"/>
+          <text x="30" y="44" text-anchor="middle" font-family="DM Mono, monospace" font-size="20" fill="#0b2410" font-weight="700">4</text>
+        </svg>
+      </div>
+      <div class="dice-txt">
+        <strong>d4 — the goal die</strong>
+        <span>Sets each side's goals in a match: 0, 1, 2 or 3. Also used in extra time — a roll of 1 scores.</span>
+      </div>
+    </div>
+
+    <div class="dice-row">
+      <div class="dice-ill">
+        <svg viewBox="0 0 60 60" width="52" height="52" aria-hidden="true">
+          <rect x="10" y="10" width="40" height="40" rx="8" fill="#5a6b7a" stroke="#3d4954" stroke-width="2"/>
+          <text x="30" y="38" text-anchor="middle" font-family="DM Mono, monospace" font-size="20" fill="#fff" font-weight="700">6</text>
+        </svg>
+      </div>
+      <div class="dice-txt">
+        <strong>hidden d6 — the bonus die</strong>
+        <span>Roll a 3 on the d4 and a hidden d6 rolls behind the scenes. On a 6 you get a bonus goal, chaining on further 6s. You only see the final score. Hard cap: 9.</span>
+      </div>
+    </div>
+
+    <div class="dice-row">
+      <div class="dice-ill">
+        <svg viewBox="0 0 60 60" width="52" height="52" aria-hidden="true">
+          <polygon points="30,4 52,17 52,43 30,56 8,43 8,17" fill="#e08a2a" stroke="#a9631a" stroke-width="2"/>
+          <text x="30" y="38" text-anchor="middle" font-family="DM Mono, monospace" font-size="18" fill="#3a1e05" font-weight="700">20</text>
+        </svg>
+      </div>
+      <div class="dice-txt">
+        <strong>d20 — the golden chance</strong>
+        <span>In a knockout tie still level after extra time, each team rolls a d20. Only a 20 scores — rare. One team on 20 wins instantly; if neither hits 20 (or both do), it's penalties.</span>
+      </div>
+    </div>
+
+    <div class="info-flow">
+      <strong>Level knockout tie?</strong> Extra time → d20 golden chance → penalty shootout, in that order, until someone wins.
+    </div>
+
+    <p class="infolead" style="margin-top:1rem;font-size:.72rem">More dice skins — disco, starry, flag and more — are planned for later.</p>
+    <button class="primary" id="infoClose">Got it</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
+<script>
+/* =========================================================================
+   Kickoff Cup — single-file browser tournament game.
+   Save/load uses localStorage. NOTE: localStorage is blocked inside the
+   Claude artifact preview, so here we fall back to an in-memory store and
+   the JSON export/import buttons. Once you host this file (e.g. GitHub
+   Pages) localStorage works automatically and progress persists per browser.
+   ========================================================================= */
+
+// ---- storage shim: real localStorage when available, memory otherwise ----
+const Store = (() => {
+  let ok = false;
+  try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); ok = true; } catch(e){ ok = false; }
+  const mem = {};
+  return {
+    persistent: ok,
+    get:(k)=> ok ? localStorage.getItem(k) : (k in mem ? mem[k] : null),
+    set:(k,v)=> ok ? localStorage.setItem(k,v) : (mem[k]=v),
+    del:(k)=> ok ? localStorage.removeItem(k) : (delete mem[k]),
+  };
+})();
+const SAVE_KEY = 'kickoffcup.v1';
+const INFO_SEEN_KEY = 'kickoffcup.infoSeen';
+
+// ---- team pool: national teams with flag emoji ----
+const POOL = [
+  ['Brazil','🇧🇷'],['Argentina','🇦🇷'],['France','🇫🇷'],['England','🇬🇧'],['Spain','🇪🇸'],
+  ['Germany','🇩🇪'],['Italy','🇮🇹'],['Portugal','🇵🇹'],['Netherlands','🇳🇱'],['Belgium','🇧🇪'],
+  ['Croatia','🇭🇷'],['Uruguay','🇺🇾'],['Colombia','🇨🇴'],['Mexico','🇲🇽'],['United States','🇺🇸'],
+  ['Denmark','🇩🇰'],['Switzerland','🇨🇭'],['Sweden','🇸🇪'],['Poland','🇵🇱'],['Senegal','🇸🇳'],
+  ['Morocco','🇲🇦'],['Japan','🇯🇵'],['South Korea','🇰🇷'],['Australia','🇦🇺'],['Serbia','🇷🇸'],
+  ['Wales','🏴'],['Ghana','🇬🇭'],['Cameroon','🇨🇲'],['Nigeria','🇳🇬'],['Egypt','🇪🇬'],
+  ['Ivory Coast','🇨🇮'],['Ecuador','🇪🇨'],['Peru','🇵🇪'],['Chile','🇨🇱'],['Paraguay','🇵🇾'],
+  ['Austria','🇦🇹'],['Ukraine','🇺🇦'],['Czechia','🇨🇿'],['Norway','🇳🇴'],['Scotland','🏴'],
+  ['Türkiye','🇹🇷'],['Greece','🇬🇷'],['Hungary','🇭🇺'],['Romania','🇷🇴'],['Ireland','🇮🇪'],
+  ['Iran','🇮🇷'],['Saudi Arabia','🇸🇦'],['Qatar','🇶🇦'],['Tunisia','🇹🇳'],['Algeria','🇩🇿'],
+  ['Costa Rica','🇨🇷'],['Panama','🇵🇦'],['Canada','🇨🇦'],['Jamaica','🇯🇲'],['Venezuela','🇻🇪'],
+  ['Bolivia','🇧🇴'],['New Zealand','🇳🇿'],['Slovenia','🇸🇮'],['Slovakia','🇸🇰'],['Finland','🇫🇮'],
+  ['Iceland','🇮🇸'],['Mali','🇲🇱'],['Burkina Faso','🇧🇫'],['DR Congo','🇨🇩'],['South Africa','🇿🇦'],
+  ['China','🇨🇳'],['Iraq','🇮🇶'],['UAE','🇦🇪'],['Uzbekistan','🇺🇿'],['Honduras','🇭🇳']
+];
+
+const MAX_GOALS = 3;          // click-mode cap AND d4 range (0–3)
+const GOAL_DIE = 4;           // d4: rand(GOAL_DIE) → 0..3
+const HARD_CAP = 9;           // absolute cap on a dice-rolled score (bonus chain)
+const SO_KICKS = 5;           // penalties per side in a shootout
+const START_YEAR = 2028;      // first edition; +4 each time, no end
+// group labels A..P (supports up to 16 groups for the 64-team cup)
+const GROUP_LETTERS = 'ABCDEFGHIJKLMNOP'.split('');
+
+// Competition configs — WC only for now. Structured so European/Copa/etc.
+// can be added later as data rather than new code (pool + group counts).
+const COMPETITIONS = {
+  wc: { name:'World Cup', sizes:{ 32:{groups:8}, 64:{groups:16} } }
+};
+
+let G = null; // game state
+let HISTORY = []; // [{year, competition, championName, championFlag}]
+
+// ---- randomness: crypto-backed shuffle (Fisher–Yates) ----
+function rand(n){
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return buf[0] % n;
+}
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j=rand(i+1); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+// Goal roll: d4 gives 0..3. On a 3, a hidden d6 is rolled; each 6 grants an
+// extra roll for one more goal (0 or 1), chaining on further 6s. Hard cap 9.
+function rollGoalWithBonus(){
+  let goals = rand(GOAL_DIE); // 0..3
+  if(goals === GOAL_DIE-1){   // rolled the max (3): bonus phase
+    while(goals < HARD_CAP){
+      const bonusDie = rand(6)+1; // silent d6, 1..6
+      if(bonusDie !== 6) break;
+      goals += rand(2);           // extra goal: 0 or 1
+    }
+  }
+  return Math.min(goals, HARD_CAP);
+}
+
+// ---- build a fresh tournament ----
+function newGame(teamCount, scoreMode, competition='wc', year=START_YEAR){
+  const cfg = COMPETITIONS[competition].sizes[teamCount];
+  const nGroups = cfg.groups;
+  const drawn = shuffle(POOL).slice(0,teamCount).map(([name,flag],i)=>({id:i,name,flag}));
+  const groups = [];
+  for(let g=0; g<nGroups; g++){
+    const teams = drawn.slice(g*4, g*4+4).map(t=>t.id);
+    // round-robin: 6 matches (0v1,2v3,0v2,1v3,0v3,1v2)
+    const idx = [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]];
+    const matches = idx.map(([a,b])=>({h:teams[a],a:teams[b],hs:null,as:null}));
+    groups.push({letter:GROUP_LETTERS[g], teams, matches});
+  }
+  G = {
+    competition, year, teamCount, nGroups, scoreMode,
+    teams: Object.fromEntries(drawn.map(t=>[t.id,t])),
+    groups,
+    knockout:null,   // built after groups complete
+    stage:'groups',  // groups | ko | done
+    createdAt: Date.now()
+  };
+  save();
+  render();
+}
+
+function team(id){ return G.teams[id]; }
+
+// ---- standings ----
+function standings(group){
+  const rows = {};
+  group.teams.forEach(id=> rows[id]={id,P:0,W:0,D:0,L:0,GF:0,GA:0,GD:0,Pts:0});
+  group.matches.forEach(m=>{
+    if(m.hs==null||m.as==null) return;
+    const h=rows[m.h], a=rows[m.a];
+    h.P++;a.P++; h.GF+=m.hs;h.GA+=m.as; a.GF+=m.as;a.GA+=m.hs;
+    if(m.hs>m.as){h.W++;a.L++;h.Pts+=3;}
+    else if(m.hs<m.as){a.W++;h.L++;a.Pts+=3;}
+    else {h.D++;a.D++;h.Pts++;a.Pts++;}
+  });
+  Object.values(rows).forEach(r=>r.GD=r.GF-r.GA);
+  // sort: Pts, GD, GF, then leave ties for dice at qualification time
+  const arr = Object.values(rows).sort((x,y)=>
+    y.Pts-x.Pts || y.GD-x.GD || y.GF-x.GF || 0);
+  return arr;
+}
+function groupComplete(group){ return group.matches.every(m=>m.hs!=null&&m.as!=null); }
+function allGroupsComplete(){ return G.groups.every(groupComplete); }
+
+// ---- knockout ----
+// Standard crossing: winners kept apart from their own runner-up and from
+// the adjacent group's winner. For N groups (2N qualifiers) we pair groups
+// (0,1),(2,3),... and cross: W0vR1, W1vR0, W2vR3, W3vR2, ...
+function buildKnockout(){
+  const q = G.groups.map(grp=>{
+    const s = standings(grp);
+    return [s[0].id, s[1].id]; // [winner, runnerUp]
+  });
+  const firstRound = [];
+  for(let g=0; g<q.length; g+=2){
+    const A=q[g], B=q[g+1];
+    firstRound.push(tie(A[0], B[1])); // winner A vs runner-up B
+    firstRound.push(tie(B[0], A[1])); // winner B vs runner-up A
+  }
+  // build empty subsequent rounds until a single final tie remains
+  const rounds = [firstRound];
+  let size = firstRound.length;
+  while(size > 1){
+    size = size/2;
+    rounds.push(Array(size).fill(0).map(()=>tie(null,null)));
+  }
+  G.knockout = { rounds, champion:null };
+  G.stage='ko';
+  save();
+}
+function tie(h,a){ return {h,a,hs:null,as:null,winner:null,et:null,d20:null,so:null}; }
+
+// ---- rendering ------------------------------------------------------------
+const app = document.getElementById('app');
+
+function render(){
+  document.getElementById('btnExport').disabled = !G && !HISTORY.length;
+  document.getElementById('btnImportTrigger').disabled = false;
+  if(!G){ renderSetup(); }
+  else if(G.stage==='groups') renderGroups();
+  else renderKnockout();
+  paintFlags(document.getElementById('app'));
+}
+
+// Replace flag emoji with tiny Twemoji images so flags show cross-platform
+// (Windows has no colour flag emoji). Silently no-ops if the CDN is blocked.
+function paintFlags(el){
+  try{
+    if(el && window.twemoji){ twemoji.parse(el, {folder:'svg', ext:'.svg'}); }
+  }catch(e){ /* fall back to native emoji/letters */ }
+}
+
+function renderSetup(){
+  const year = nextYear();
+  app.innerHTML = `
+    <div class="setup">
+      <h2>Draw the field. Play the cup.</h2>
+      <p>All nations go into the pot; a random field is drawn into groups of four.
+         You decide every result — by hand, or let the dice decide.</p>
+      <div class="hint" style="margin-bottom:1.2rem">Next edition: <strong style="color:var(--brass)">World Cup ${year}</strong></div>
+      <div class="sizes">
+        ${[[32,'8 groups'],[64,'16 groups']].map(([n,l])=>`
+          <div class="size-card ${n===32?'sel':''}" data-size="${n}">
+            <div class="n">${n}</div><div class="l">teams · ${l}</div>
+          </div>`).join('')}
+      </div>
+      <p class="hint">64 teams is a long sitting — 96 group matches plus an extra knockout round.</p>
+      <div class="scoremode">
+        <label class="sel" data-mode="click"><input type="radio" name="mode" checked>
+          <div><strong>Click to set scores</strong><small>Type each team's goals (any number).</small></div></label>
+        <label data-mode="dice"><input type="radio" name="mode">
+          <div><strong>Roll for scores</strong><small>A d4 sets goals (0–3). Roll a 3 and a hidden bonus die can add more, up to ${HARD_CAP}.</small></div></label>
+      </div>
+      <button class="primary" id="btnStart">Draw the cup</button>
+      ${renderHistoryPanel()}
+    </div>`;
+
+  let size=32, mode='click';
+  app.querySelectorAll('.size-card').forEach(c=>c.onclick=()=>{
+    app.querySelectorAll('.size-card').forEach(x=>x.classList.remove('sel'));
+    c.classList.add('sel'); size=+c.dataset.size;
+  });
+  app.querySelectorAll('.scoremode label').forEach(l=>l.onclick=()=>{
+    app.querySelectorAll('.scoremode label').forEach(x=>x.classList.remove('sel'));
+    l.classList.add('sel'); mode=l.dataset.mode; l.querySelector('input').checked=true;
+  });
+  document.getElementById('btnStart').onclick=()=>newGame(size,mode,'wc',year);
+}
+
+function nextYear(){
+  if(HISTORY.length===0) return START_YEAR;
+  return HISTORY[HISTORY.length-1].year + 4;
+}
+
+function renderHistoryPanel(){
+  if(!HISTORY.length) return '';
+  const rows = HISTORY.slice().reverse().map(h=>`
+    <div class="hist-row">
+      <span class="hist-year">${h.championFlag||''} ${h.year}</span>
+      <span class="hist-name">${h.championName}</span>
+    </div>`).join('');
+  return `<div class="history">
+    <h3>Hall of champions</h3>
+    ${rows}
+  </div>`;
+}
+
+function stageBar(){
+  const s = G.stage;
+  const chip=(k,label)=>{
+    let cls='chip';
+    if(s===k) cls+=' active';
+    if((k==='groups'&&s!=='groups')) cls+=' done';
+    return `<span class="${cls}">${label}</span>`;
+  };
+  return `<div class="stagebar">
+    ${chip('groups','Group stage')}
+    ${chip('ko','Knockout')}
+    ${G.knockout&&G.knockout.champion?'<span class="chip done">Champion</span>':'<span class="chip">Champion</span>'}
+  </div>`;
+}
+
+function renderGroups(){
+  const done = allGroupsComplete();
+  app.innerHTML = stageBar() + `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.6rem">
+      <div class="hint" style="margin:0">Top two of each group advance (▲). Ties: points, then goal difference, then goals scored${G.scoreMode==='dice'?' — press N for next match, D to roll':''}.</div>
+      <button class="primary" id="toKO" ${done?'':'disabled'}>Advance to knockout →</button>
+    </div>
+    <div class="groups">${G.groups.map(renderGroup).join('')}</div>`;
+
+  document.getElementById('toKO').onclick=()=>{
+    // resolve any fully-level qualification races by dice before building
+    resolveQualTiesThen(()=>{ buildKnockout(); render(); });
+  };
+  bindScoreInputs();
+}
+
+function renderGroup(grp){
+  const s = standings(grp);
+  const rowsHtml = s.map((r,i)=>{
+    const t=team(r.id);
+    return `<tr class="${i<2?'qual':''}">
+      <td class="team"><span class="flag">${t.flag}</span>${t.name}</td>
+      <td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td>
+      <td>${r.GF}:${r.GA}</td><td>${r.GD>0?'+':''}${r.GD}</td><td><strong>${r.Pts}</strong></td>
+    </tr>`;
+  }).join('');
+
+  const matchesHtml = grp.matches.map((m,mi)=>{
+    const h=team(m.h), a=team(m.a);
+    const played = m.hs!=null;
+    let scoreCell;
+    if(G.scoreMode==='dice'){
+      scoreCell = played
+        ? `<span class="played">${m.hs} – ${m.as}</span>`
+        : `<button class="ghost" style="padding:.15rem .5rem;font-size:.72rem" data-roll-group="${grp.letter}" data-mi="${mi}">roll</button>`;
+    } else {
+      scoreCell = `<span class="score">
+        <input type="number" min="0" value="${m.hs??''}" data-g="${grp.letter}" data-mi="${mi}" data-side="h" aria-label="${h.name} goals">
+        <span class="dash">–</span>
+        <input type="number" min="0" value="${m.as??''}" data-g="${grp.letter}" data-mi="${mi}" data-side="a" aria-label="${a.name} goals">
+      </span>`;
+    }
+    return `<div class="match">
+      <span class="side home"><span class="nm">${h.name}</span><span class="flag">${h.flag}</span></span>
+      ${scoreCell}
+      <span class="side"><span class="flag">${a.flag}</span><span class="nm">${a.name}</span></span>
+    </div>`;
+  }).join('');
+
+  return `<div class="group">
+    <h3><span class="lbl">Group ${grp.letter}</span>${groupComplete(grp)?'<span style="color:var(--win);font-size:.7rem">complete</span>':''}</h3>
+    <table>
+      <thead><tr><th class="team">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF:GA</th><th>GD</th><th>Pts</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="matches">${matchesHtml}</div>
+  </div>`;
+}
+
+function bindScoreInputs(){
+  app.querySelectorAll('input[type=number]').forEach(inp=>{
+    inp.onchange=()=>{
+      let v = inp.value==='' ? null : Math.max(0, parseInt(inp.value,10));
+      if(v!=null && isNaN(v)) v=null;
+      inp.value = v==null?'':v;
+      const grp = G.groups.find(x=>x.letter===inp.dataset.g);
+      const m = grp.matches[+inp.dataset.mi];
+      m[inp.dataset.side==='h'?'hs':'as'] = v;
+      save(); renderGroups();
+    };
+  });
+  app.querySelectorAll('[data-roll-group]').forEach(btn=>{
+    btn.onclick=()=>{
+      const grp = G.groups.find(x=>x.letter===btn.dataset.rollGroup);
+      const m = grp.matches[+btn.dataset.mi];
+      const h=team(m.h),a=team(m.a);
+      openScoreDice(h,a,(hs,as)=>{ m.hs=hs; m.as=as; save(); renderGroups(); }, `Group ${grp.letter}`);
+    };
+  });
+}
+
+// ---- knockout rendering ----
+function roundNames(nRounds){
+  // last three are always SF, Final; label earlier rounds by team count
+  const base=['Final','Semi-finals','Quarter-finals'];
+  const names=[];
+  for(let i=0;i<nRounds;i++){
+    if(i<3) names.unshift(base[i]);
+    else names.unshift('Round of '+Math.pow(2,i+1));
+  }
+  return names;
+}
+function renderKnockout(){
+  const ko=G.knockout;
+  const names=roundNames(ko.rounds.length);
+  let champHtml='';
+  if(ko.champion!=null){
+    const c=team(ko.champion);
+    const year = (typeof G.year==='number' && !isNaN(G.year)) ? G.year : START_YEAR;
+    G.year = year; // heal any bad value in place
+    // a finished game loaded from an older save may never have been recorded
+    recordChampion(ko.champion);
+    champHtml=`<div class="champion"><div class="cup">🏆</div>
+      <div class="who"><span class="flag">${c.flag}</span> ${c.name}</div>
+      <div class="hint" style="margin:.2rem 0 1rem">World Cup ${year} champions</div>
+      <button class="primary" id="btnNext">Start World Cup ${year+4} →</button></div>`;
+  }
+  app.innerHTML = stageBar() + champHtml + `<div class="bracket">${
+    ko.rounds.map((round,ri)=>`
+      <div class="round"><h4>${names[ri]}</h4>${
+        round.map((t,ti)=>renderTie(t,ri,ti)).join('')
+      }</div>`).join('')
+  }</div>
+  <div class="hint">${G.scoreMode==='dice'
+    ? 'Roll to set each tie. Level results go to a shootout.'
+    : 'Click a score to set it. Level ties go to a shootout.'}</div>`;
+  bindTieInputs();
+  const nextBtn=document.getElementById('btnNext');
+  if(nextBtn) nextBtn.onclick=()=>{
+    // carry same team count and score mode into the next edition
+    newGame(G.teamCount, G.scoreMode, G.competition, G.year+4);
+  };
+}
+
+function renderTie(t,ri,ti){
+  const diceMode = G.scoreMode==='dice';
+  const played = t.hs!=null && t.as!=null;
+  const cell=(id,scoreKey)=>{
+    if(id==null) return `<div class="row"><div class="nm"><span class="t" style="color:var(--muted)">—</span></div><div class="sc">·</div></div>`;
+    const tm=team(id);
+    const win = t.winner===id;
+    const sc = played ? (scoreKey==='h'?t.hs:t.as) : '·';
+    // show how a level tie was decided, next to the name
+    let tag='';
+    if(t.so){ tag = ` <small style="color:var(--brass)">(${scoreKey==='h'?t.so.h:t.so.a} pens)</small>`; }
+    else if(t.d20 && (t.d20.h===20||t.d20.a===20)){ tag = ` <small style="color:var(--brass)">(golden)</small>`; }
+    else if(t.et && (t.et.h||t.et.a)){ tag = ` <small style="color:var(--brass)">(a.e.t.)</small>`; }
+    const clickable = diceMode ? '' : `data-ri="${ri}" data-ti="${ti}" data-side="${scoreKey}"`;
+    return `<div class="row ${win?'winner':''}">
+      <div class="nm"><span class="flag">${tm.flag}</span><span class="t">${tm.name}</span>${tag}</div>
+      <div class="sc ${played?'set':''} ${diceMode?'nolink':''}" ${clickable}>${sc}</div>
+    </div>`;
+  };
+  const ready = t.h!=null && t.a!=null;
+  const rollBtn = (diceMode && ready && !played)
+    ? `<div class="tie-roll"><button class="ghost" style="width:100%;border-radius:0;border:none;border-top:1px solid var(--line);padding:.35rem;font-size:.72rem" data-roll-ko-ri="${ri}" data-roll-ko-ti="${ti}">roll result</button></div>`
+    : '';
+  return `<div class="tie" data-ready="${ready}">
+    ${cell(t.h,'h')}
+    ${cell(t.a,'a')}
+    ${rollBtn}
+  </div>`;
+}
+
+function bindTieInputs(){
+  app.querySelectorAll('.tie .sc').forEach(cell=>{
+    if(!cell.dataset.ri) return;
+    cell.onclick=()=>{
+      const ri=+cell.dataset.ri, ti=+cell.dataset.ti;
+      const t=G.knockout.rounds[ri][ti];
+      if(t.h==null||t.a==null) return;
+      const side=cell.dataset.side;
+      const cur = side==='h'? t.hs : t.as;
+      const v = promptGoals(cur);
+      if(v==null) return;
+      if(side==='h') t.hs=v; else t.as=v;
+      settleTie(ri,ti);
+    };
+  });
+  // dice mode: one button rolls both sides via the same score-dice as groups
+  app.querySelectorAll('[data-roll-ko-ri]').forEach(btn=>{
+    btn.onclick=()=>{
+      const ri=+btn.dataset.rollKoRi, ti=+btn.dataset.rollKoTi;
+      const t=G.knockout.rounds[ri][ti];
+      if(t.h==null||t.a==null) return;
+      const label=roundNames(G.knockout.rounds.length)[ri];
+      openScoreDice(team(t.h), team(t.a), (hs,as)=>{
+        t.hs=hs; t.as=as; settleTie(ri,ti);
+      }, label);
+    };
+  });
+}
+
+function promptGoals(cur){
+  const raw = window.prompt('Goals:', cur==null?'':cur);
+  if(raw==null) return null;
+  let v=parseInt(raw,10);
+  if(isNaN(v)) return null;
+  return Math.max(0,v);
+}
+
+function settleTie(ri,ti){
+  const t=G.knockout.rounds[ri][ti];
+  if(t.hs==null||t.as==null){ save(); renderKnockout(); return; }
+  if(t.hs>t.as){ t.winner=t.h; advance(ri,ti,t.h); save(); renderKnockout(); return; }
+  if(t.as>t.hs){ t.winner=t.a; advance(ri,ti,t.a); save(); renderKnockout(); return; }
+
+  // Level after normal time. Chain: extra time → d20 golden chance → penalties.
+  const H=team(t.h), A=team(t.a);
+  const finishWith = (winnerKey, label, extra)=>{
+    t.winner = winnerKey==='h'? t.h : t.a;
+    if(extra) Object.assign(t, extra);
+    advance(ri,ti,t.winner);
+    save(); renderKnockout();
+    toast(`${team(t.winner).name} win ${label}`);
+  };
+
+  openExtraTime(H, A, t.hs, (etH, etA)=>{
+    t.et = {h:etH, a:etA};
+    if(etH>etA){ return finishWith('h','after extra time'); }
+    if(etA>etH){ return finishWith('a','after extra time'); }
+    // still level → d20 golden chance
+    openGoldenD20(H, A, (d20H, d20A, scoredH, scoredA)=>{
+      t.d20 = {h:d20H, a:d20A};
+      if(scoredH && !scoredA){ return finishWith('h','with a golden goal'); }
+      if(scoredA && !scoredH){ return finishWith('a','with a golden goal'); }
+      // neither, or both → penalties
+      openShootout(H, A, t.hs, (soH,soA)=>{
+        t.so = {h:soH, a:soA};
+        const wk = soH>soA ? 'h':'a';
+        finishWith(wk, `on penalties ${Math.max(soH,soA)}–${Math.min(soH,soA)}`);
+      });
+    });
+  });
+  save();
+}
+
+function advance(ri,ti,winnerId){
+  const lastRound = G.knockout.rounds.length - 1;
+  if(ri>=lastRound){
+    G.knockout.champion=winnerId; G.stage='done';
+    recordChampion(winnerId);
+    return;
+  }
+  const next=G.knockout.rounds[ri+1][Math.floor(ti/2)];
+  if(ti%2===0) next.h=winnerId; else next.a=winnerId;
+}
+
+function recordChampion(id){
+  // avoid double-recording if the tie is re-settled
+  if(HISTORY.some(h=>h.year===G.year && h.competition===G.competition)) return;
+  const c=team(id);
+  HISTORY.push({year:G.year, competition:G.competition, championName:c.name, championFlag:c.flag});
+  save();
+}
+
+// ---- dice modal ----
+let diceCb=null, diceMode='score';
+let diceScoreState=null;
+let soState=null;
+let etState=null;   // extra time
+let d20State=null;  // golden d20
+let rolling=false;  // re-entrancy lock: ignore clicks mid-animation
+
+function paintModal(){ paintFlags(document.getElementById('diceOverlay')); }
+
+function openScoreDice(h,a,cb,label){
+  // d4 two-roll score flow: each roll gives 0..3 goals
+  const prefix = label ? `${label} · ` : '';
+  document.getElementById('diceTitle').textContent=`${prefix}${h.name} vs ${a.name}`;
+  document.getElementById('diceSub').textContent='Roll the d4 for each side\u2019s goals (0\u20133)';
+  document.getElementById('diceResult').textContent='';
+  document.getElementById('dieFace').textContent='?';
+  document.getElementById('diceRoll').textContent='Roll (D)';
+  diceMode='score'; diceCb=cb; diceScoreState={h:null,a:null,teams:{h,a}};
+  document.getElementById('diceOverlay').classList.add('show');
+}
+
+// Extra time: each team rolls the d4 once; a 1 scores (25%), else no goal.
+function openExtraTime(h,a,levelAt,cb){
+  document.getElementById('diceTitle').textContent='Extra time';
+  document.getElementById('diceSub').textContent=`${h.name} vs ${a.name} — level at ${levelAt}. One d4 each; roll a 1 to score.`;
+  document.getElementById('dieFace').textContent='?';
+  document.getElementById('diceRoll').textContent='Roll d4 (D)';
+  diceMode='extra'; diceCb=cb; etState={teams:{h,a}, h:null, a:null};
+  updateExtraSub();
+  document.getElementById('diceOverlay').classList.add('show');
+  paintModal();
+}
+function updateExtraSub(){
+  const s=etState; if(!s) return;
+  const res=document.getElementById('diceResult');
+  const hg = s.h==null?'·':(s.h?'⚽':'0');
+  const ag = s.a==null?'·':(s.a?'⚽':'0');
+  const next = s.h==null ? s.teams.h : (s.a==null ? s.teams.a : null);
+  res.innerHTML =
+    `<div style="font-family:var(--mono);font-size:1.1rem;margin-bottom:.3rem">`+
+    `${s.teams.h.flag} ${hg} – ${ag} ${s.teams.a.flag}</div>`+
+    (next?`<div style="font-size:.75rem;color:var(--muted)">next: ${next.flag} ${next.name}</div>`:'');
+  paintModal();
+}
+
+// Golden d20: each team rolls a d20 once; only a 20 scores.
+function openGoldenD20(h,a,cb){
+  document.getElementById('diceTitle').textContent='Golden chance — d20';
+  document.getElementById('diceSub').textContent=`${h.name} vs ${a.name} — one d20 each. Only a 20 scores a goal.`;
+  document.getElementById('dieFace').textContent='?';
+  document.getElementById('diceRoll').textContent='Roll d20 (D)';
+  diceMode='d20'; diceCb=cb; d20State={teams:{h,a}, h:null, a:null};
+  updateD20Sub();
+  document.getElementById('diceOverlay').classList.add('show');
+  paintModal();
+}
+function updateD20Sub(){
+  const s=d20State; if(!s) return;
+  const res=document.getElementById('diceResult');
+  const mark = v => v==null ? '·' : (v===20 ? `20 ⚽` : v);
+  const next = s.h==null ? s.teams.h : (s.a==null ? s.teams.a : null);
+  res.innerHTML =
+    `<div style="font-family:var(--mono);font-size:1.05rem;margin-bottom:.3rem">`+
+    `${s.teams.h.flag} ${mark(s.h)} &nbsp;·&nbsp; ${mark(s.a)} ${s.teams.a.flag}</div>`+
+    (next?`<div style="font-size:.75rem;color:var(--muted)">next: ${next.flag} ${next.name} — need a 20</div>`:'');
+  paintModal();
+}
+
+// Penalty shootout, kick by kick.
+// Model each kick as scored(1)/missed(0) at 50/50. Best of five; stop early
+// when a lead can't be caught given remaining kicks. Then sudden death:
+// one kick each, decided the first round the two differ.
+function openShootout(h,a,levelAt,cb){
+  document.getElementById('diceTitle').textContent='Penalty shootout';
+  document.getElementById('diceSub').textContent=`${h.name} vs ${a.name} — level at ${levelAt}`;
+  document.getElementById('diceResult').innerHTML='';
+  document.getElementById('dieFace').textContent='⚽';
+  document.getElementById('diceRoll').textContent='Take kick (D)';
+  diceMode='shootout'; diceCb=cb;
+  soState={
+    teams:{h,a},
+    h:0, a:0,           // goals
+    hTaken:0, aTaken:0, // kicks taken
+    turn:'h',           // whose kick is next
+    phase:'best5',      // best5 → sudden
+    log:[]
+  };
+  updateShootoutSub();
+  document.getElementById('diceOverlay').classList.add('show');
+  paintModal();
+}
+
+function updateShootoutSub(){
+  const s=soState; if(!s) return;
+  const res=document.getElementById('diceResult');
+  const nextTeam = s.turn==='h'? s.teams.h : s.teams.a;
+  const phase = s.phase==='best5' ? `Best of ${SO_KICKS}` : 'Sudden death';
+  res.innerHTML =
+    `<div style="font-family:var(--mono);font-size:1.1rem;margin-bottom:.3rem">`+
+    `${s.teams.h.flag} ${s.h} – ${s.a} ${s.teams.a.flag}</div>`+
+    `<div style="font-size:.75rem;color:var(--muted)">${phase} · next: ${nextTeam.flag} ${nextTeam.name}</div>`+
+    (s.log.length?`<div style="font-size:.72rem;color:var(--muted);margin-top:.4rem">${s.log.slice(-5).join(' · ')}</div>`:'');
+  paintModal();
+}
+
+// Is the shootout already decided during best-of-five?
+function soDecidedBest5(){
+  const s=soState;
+  const hLeft = SO_KICKS - s.hTaken;
+  const aLeft = SO_KICKS - s.aTaken;
+  // if one team's lead exceeds what the other can still reach, it's over
+  if(s.h > s.a + aLeft) return 'h';
+  if(s.a > s.h + hLeft) return 'a';
+  // all kicks taken?
+  if(s.hTaken>=SO_KICKS && s.aTaken>=SO_KICKS) return s.h!==s.a ? (s.h>s.a?'h':'a') : null;
+  return undefined; // not decided, keep going
+}
+
+function closeDice(){
+  document.getElementById('diceOverlay').classList.remove('show');
+  document.getElementById('diceRoll').textContent='Roll';
+  diceCb=null; diceScoreState=null; soState=null; etState=null; d20State=null; rolling=false;
+}
+
+function doRoll(){
+  if(rolling) return;               // guard against rapid/double clicks
+  if(diceMode==='score' && !diceScoreState) return;
+  if(diceMode==='shootout' && !soState) return;
+  if(diceMode==='extra' && !etState) return;
+  if(diceMode==='d20' && !d20State) return;
+  rolling=true;
+
+  const face=document.getElementById('dieFace');
+  face.classList.remove('roll'); void face.offsetWidth; face.classList.add('roll');
+  const res=document.getElementById('diceResult');
+
+  if(diceMode==='score'){
+    const val = rollGoalWithBonus(); // 0..9 via silent bonus dice
+    setTimeout(()=>{
+      const st=diceScoreState;
+      if(!st){ rolling=false; return; }   // closed mid-flight; bail safely
+      face.textContent=val;
+      if(st.h==null){
+        st.h=val;
+        res.textContent=`${st.teams.h.name}: ${val} — roll for ${st.teams.a.name}`;
+        rolling=false;
+      } else {
+        st.a=val;
+        res.textContent=`Final: ${st.h} – ${st.a}`;
+        const cb=diceCb, hs=st.h, as=val;
+        setTimeout(()=>{ closeDice(); rolling=false; if(cb) cb(hs,as); }, 700);
+      }
+    },300);
+
+  } else if(diceMode==='shootout'){
+    const s=soState;
+    const taker = s.turn==='h'? s.teams.h : s.teams.a;
+    const scored = rand(2)===1; // 50/50 score or miss
+    setTimeout(()=>{
+      if(!soState){ rolling=false; return; }
+      face.textContent = scored ? '⚽' : '✗';
+      if(s.turn==='h'){ s.hTaken++; if(scored) s.h++; }
+      else { s.aTaken++; if(scored) s.a++; }
+      s.log.push(`${taker.flag}${scored?'✔':'✗'}`);
+
+      if(s.phase==='best5'){
+        s.turn = s.turn==='h' ? 'a' : 'h';
+        const dec = soDecidedBest5();
+        if(dec==='h' || dec==='a'){ rolling=false; return finishShootout(dec); }
+        if(dec===null){ s.phase='sudden'; s.turn='h'; s.hTaken=0; s.aTaken=0; }
+        updateShootoutSub(); rolling=false;
+      } else {
+        // sudden death: after both have taken one this round, compare
+        if(s.turn==='h'){ s.turn='a'; }
+        else {
+          s.turn='h';
+          if(s.h!==s.a){ rolling=false; return finishShootout(s.h>s.a?'h':'a'); }
+        }
+        updateShootoutSub(); rolling=false;
+      }
+    },300);
+
+  } else if(diceMode==='extra'){
+    const s=etState;
+    const side = s.h==null ? 'h' : 'a';
+    const roll = rand(GOAL_DIE);   // 0..3
+    const scored = roll===1 ? 1 : 0; // a 1 scores
+    setTimeout(()=>{
+      if(!etState){ rolling=false; return; }
+      face.textContent = roll;
+      s[side] = scored;
+      updateExtraSub();
+      if(s.h!=null && s.a!=null){
+        const cb=diceCb, hh=s.h, aa=s.a;
+        setTimeout(()=>{ closeDice(); rolling=false; if(cb) cb(hh,aa); }, 850);
+      } else {
+        rolling=false;
+      }
+    },300);
+
+  } else if(diceMode==='d20'){
+    const s=d20State;
+    const side = s.h==null ? 'h' : 'a';
+    const roll = rand(20)+1; // 1..20
+    setTimeout(()=>{
+      if(!d20State){ rolling=false; return; }
+      face.textContent = roll;
+      s[side] = roll;
+      updateD20Sub();
+      if(s.h!=null && s.a!=null){
+        const cb=diceCb, dh=s.h, da=s.a;
+        const scoredH = dh===20, scoredA = da===20;
+        setTimeout(()=>{ closeDice(); rolling=false; if(cb) cb(dh,da,scoredH,scoredA); }, 900);
+      } else {
+        rolling=false;
+      }
+    },300);
+
+  } else {
+    rolling=false;
+  }
+}
+document.getElementById('diceRoll').onclick=doRoll;
+
+function finishShootout(winnerKey){
+  const s=soState, cb=diceCb;
+  const wName = winnerKey==='h'? s.teams.h.name : s.teams.a.name;
+  document.getElementById('diceResult').innerHTML =
+    `<div style="font-family:var(--mono);font-size:1.2rem;color:var(--brass)">`+
+    `${s.teams.h.flag} ${s.h} – ${s.a} ${s.teams.a.flag}</div>`+
+    `<div style="font-size:.8rem;margin-top:.3rem">${wName} advance</div>`;
+  paintModal();
+  const soH=s.h, soA=s.a;
+  setTimeout(()=>{ closeDice(); cb(soH, soA); }, 1100);
+}
+
+// ---- qualification tie resolution before knockout (rare) ----
+function resolveQualTiesThen(done){
+  // For first draft: qualification uses Pts→GD→GF→goals-scored; deep ties are
+  // extremely rare with capped scores, so fall through directly.
+  done();
+}
+
+// ---- save / load / export ----
+// Save wraps both the current game (may be null) and the champions history.
+function save(){ try{ Store.set(SAVE_KEY, JSON.stringify({game:G, history:HISTORY})); }catch(e){} }
+
+// Backfill fields that older saves may not have, so downstream code can trust them.
+function normalizeGame(g){
+  if(!g) return g;
+  if(g.competition==null) g.competition='wc';
+  if(g.scoreMode==null) g.scoreMode='click';
+  if(g.nGroups==null) g.nGroups = Array.isArray(g.groups) ? g.groups.length : 8;
+  if(g.teamCount==null) g.teamCount = g.nGroups*4;
+  if(g.year==null || isNaN(g.year)){
+    // old saves predate the year field; place after any recorded history
+    g.year = HISTORY.length ? HISTORY[HISTORY.length-1].year + 4 : START_YEAR;
+  }
+  return g;
+}
+
+function load(){
+  const raw=Store.get(SAVE_KEY);
+  if(!raw) return false;
+  try{
+    const data=JSON.parse(raw);
+    // backward-compat: older saves stored the game object directly
+    if(data && (data.game!==undefined || data.history!==undefined)){
+      HISTORY = Array.isArray(data.history) ? data.history : [];
+      G = normalizeGame(data.game || null);
+    } else {
+      HISTORY = [];
+      G = normalizeGame(data);
+    }
+    return true;
+  }catch(e){ return false; }
+}
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+document.getElementById('btnExport').onclick=()=>{
+  const payload={game:G, history:HISTORY};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`kickoff-cup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('Save exported');
+};
+document.getElementById('btnImportTrigger').onclick=()=>document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange=(e)=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const data=JSON.parse(r.result);
+      if(data && (data.game!==undefined || data.history!==undefined)){
+        HISTORY=Array.isArray(data.history)?data.history:[];
+        G=normalizeGame(data.game||null);
+      } else { HISTORY=[]; G=normalizeGame(data); }
+      save(); render(); toast('Save imported');
+    } catch(err){ toast('That file could not be read'); } };
+  r.readAsText(f);
+  e.target.value='';
+};
+document.getElementById('btnReset').onclick=()=>{
+  if(G && !confirm('Start a new cup? Current progress is replaced. (History is kept.)')) return;
+  G=null; save(); render();
+};
+
+// ---- keyboard shortcuts ----
+// D / Enter / Space : roll (when the dice modal is open)
+// N                 : open the next unplayed match (groups) or tie (knockout)
+function modalOpen(){ return document.getElementById('diceOverlay').classList.contains('show'); }
+
+function openNext(){
+  if(!G || modalOpen() || G.scoreMode!=='dice') return;
+  if(G.stage==='groups'){
+    for(const grp of G.groups){
+      for(let mi=0; mi<grp.matches.length; mi++){
+        const m=grp.matches[mi];
+        if(m.hs==null){
+          openScoreDice(team(m.h), team(m.a), (hs,as)=>{ m.hs=hs; m.as=as; save(); renderGroups(); }, `Group ${grp.letter}`);
+          return;
+        }
+      }
+    }
+    toast('All group matches played');
+  } else if(G.knockout && !G.knockout.champion){
+    const rounds=G.knockout.rounds;
+    for(let ri=0; ri<rounds.length; ri++){
+      for(let ti=0; ti<rounds[ri].length; ti++){
+        const t=rounds[ri][ti];
+        if(t.h!=null && t.a!=null && t.hs==null){
+          const label=roundNames(G.knockout.rounds.length)[ri];
+          openScoreDice(team(t.h), team(t.a), (hs,as)=>{ t.hs=hs; t.as=as; settleTie(ri,ti); }, label);
+          return;
+        }
+      }
+    }
+    toast('No tie is ready to play yet');
+  }
+}
+
+document.addEventListener('keydown',(e)=>{
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea') return; // don't hijack typing
+  const k=e.key.toLowerCase();
+  if(modalOpen()){
+    if(k==='d'||k==='enter'||k===' '){ e.preventDefault(); doRoll(); }
+  } else {
+    if(k==='n'){ e.preventDefault(); openNext(); }
+  }
+});
+
+// ---- info / how-to-play popup ----
+function openInfo(){ document.getElementById('infoOverlay').classList.add('show'); }
+function closeInfo(){ document.getElementById('infoOverlay').classList.remove('show'); }
+document.getElementById('btnInfo').onclick=openInfo;
+document.getElementById('infoClose').onclick=()=>{
+  closeInfo();
+  try{ Store.set(INFO_SEEN_KEY,'1'); }catch(e){}
+};
+
+// ---- boot ----
+if(!load()) G=null;
+if(!Store.persistent){
+  setTimeout(()=>toast('Preview note: progress saves in this browser once hosted. Use Export to keep it here.'),600);
+}
+render();
+// first run: show the how-to-play popup once
+try{
+  if(Store.get(INFO_SEEN_KEY)!=='1'){ openInfo(); }
+}catch(e){ openInfo(); }
+
+</script>
+</body>
+</html>
